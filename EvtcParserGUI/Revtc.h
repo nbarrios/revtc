@@ -3,12 +3,17 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <queue>
 
 namespace Revtc {
 
 #define DEIMOS_STRUCTURE 0x2113
 #define DEIMOS_HANDS 0x4345
 #define KC_CONSTRUCT_CORE 0x3F85
+#define MIGHT 0x2E4
+#define QUICKNESS 0x4A3
+#define ALACRITY 0x7678
+#define FURY 0x2D5
 
 	enum class BossID : uint16_t {
 		VALE_GUARDIAN = 15438,
@@ -24,6 +29,10 @@ namespace Revtc {
 		DEIMOS = 17154,
 		SOULLESS_HORROR = 19767,
 		DHUUM = 19450,
+		CONJURED_AMALGAMATE = 43974,
+		NIKARE = 21105,
+		KENUT = 21089,
+		QUADIM = 20934,
 		MAMA = 17021,
 		SIAX = 17028,
 		ENSOLYSS = 16948,
@@ -105,6 +114,36 @@ namespace Revtc {
 		uint8_t ident_local; /* internal tracking. garbage */
 	};
 
+	struct CombatEventRev1 {
+		uint64_t time;
+		uint64_t src_agent;
+		uint64_t dst_agent;
+		int32_t value;
+		int32_t buff_dmg;
+		uint32_t overstack_value;
+		uint32_t skillid;
+		uint16_t src_instid;
+		uint16_t dst_instid;
+		uint16_t src_master_instid;
+		uint16_t dst_master_instid;
+		uint8_t iff;
+		uint8_t buff;
+		uint8_t result;
+		uint8_t is_activation;
+		uint8_t is_buffremove;
+		uint8_t is_ninety;
+		uint8_t is_fifty;
+		uint8_t is_moving;
+		uint8_t is_statechange;
+		uint8_t is_flanking;
+		uint8_t is_shields;
+		uint8_t is_offcycle;
+		uint8_t pad61;
+		uint8_t pad62;
+		uint8_t pad63;
+		uint8_t pad64;
+	};
+
 	struct Agent {
 		uint64_t addr;
 		uint32_t prof;
@@ -117,6 +156,7 @@ namespace Revtc {
 		int16_t pad2;
 		std::string name;
 		uint16_t instance_id;
+		bool first_aware_set;
 		uint64_t first_aware;
 		uint64_t last_aware;
 		uint64_t master_addr;
@@ -125,6 +165,24 @@ namespace Revtc {
 		bool is_player;
 		bool is_gadget;
 		bool is_character;
+	};
+
+	struct Boon {
+		bool is_removal;
+		uint64_t applied_at;
+		int32_t  duration;
+		uint64_t expires_at;
+		uint32_t overstack;
+
+		friend inline bool operator<(const Boon& lhs, const Boon& rhs);
+	};
+
+	struct DurationStack {
+		std::vector<Boon> boon_queue;
+		std::vector<Boon> boon;
+		uint32_t boon_accum;
+		uint32_t boon_samples;
+		float boon_avg;
 	};
 
 	struct Player {
@@ -149,11 +207,17 @@ namespace Revtc {
 		uint32_t boss_condi_damage;
 		uint32_t boss_dps;
 
-		uint32_t might_current;
-		uint32_t might_applied;
-		uint32_t might_events;
-		uint64_t might_last_event;
+		std::vector<Boon> might;
+		uint32_t might_accum;
+		uint32_t might_samples;
+		std::vector<float> might_points;
 		float might_avg;
+
+		float quickness_avg;
+		float alacrity_avg;
+		float fury_avg;
+
+		std::unordered_map<uint16_t, DurationStack> duration_boons;
 
 		std::string note;
 		uint32_t note_counter;
@@ -168,13 +232,17 @@ namespace Revtc {
 
 	struct Log {
 		std::string version;
+		uint8_t revision;
 		BossID area_id;
 		std::string encounter_name;
+		bool valid;
 		std::string error;
 
 		std::vector<Player> players;
-		float reward_at;
-		float boss_lifetime;
+		uint64_t reward_at;
+		uint64_t boss_lifetime;
+		uint64_t boss_death;
+		uint64_t encounter_duration;
 	};
 
 	class Parser
@@ -194,6 +262,7 @@ namespace Revtc {
 		~Parser();
 
 		Log parse();
+		void calcBoons(uint64_t encounter_duration);
 		std::string encounterName(BossID area_id);
 		std::pair<std::string, std::string> professionName(uint32_t prof);
 		std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
