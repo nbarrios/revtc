@@ -4,10 +4,10 @@
 #include <vector>
 #include <unordered_map>
 #include <queue>
+#include <set>
 
 namespace Revtc {
 
-#define DEIMOS_STRUCTURE 0x2113
 #define DEIMOS_HANDS 0x4345
 #define KC_CONSTRUCT_CORE 0x3F85
 #define MIGHT 0x2E4
@@ -56,19 +56,29 @@ namespace Revtc {
 		CBTS_CHANGEUP, // src_agent is now alive
 		CBTS_CHANGEDEAD, // src_agent is now dead
 		CBTS_CHANGEDOWN, // src_agent is now downed
-		CBTS_SPAWN, // src_agent is now in game tracking range
-		CBTS_DESPAWN, // src_agent is no longer being tracked
-		CBTS_HEALTHUPDATE, // src_agent has reached a health marker. dst_agent = percent * 10000 (eg. 99.5% will be 9950)
+		CBTS_SPAWN, // src_agent is now in game tracking range (not in realtime api)
+		CBTS_DESPAWN, // src_agent is no longer being tracked (not in realtime api)
+		CBTS_HEALTHUPDATE, // src_agent has reached a health marker. dst_agent = percent * 10000 (eg. 99.5% will be 9950) (not in realtime api)
 		CBTS_LOGSTART, // log start. value = server unix timestamp **uint32**. buff_dmg = local unix timestamp. src_agent = 0x637261 (arcdps id)
 		CBTS_LOGEND, // log end. value = server unix timestamp **uint32**. buff_dmg = local unix timestamp. src_agent = 0x637261 (arcdps id)
 		CBTS_WEAPSWAP, // src_agent swapped weapon set. dst_agent = current set id (0/1 water, 4/5 land)
-		CBTS_MAXHEALTHUPDATE, // src_agent has had it's maximum health changed. dst_agent = new max health
-		CBTS_POINTOFVIEW, // src_agent will be agent of "recording" player
-		CBTS_LANGUAGE, // src_agent will be text language
-		CBTS_GWBUILD, // src_agent will be game build
-		CBTS_SHARDID, // src_agent will be sever shard id
+		CBTS_MAXHEALTHUPDATE, // src_agent has had it's maximum health changed. dst_agent = new max health (not in realtime api)
+		CBTS_POINTOFVIEW, // src_agent is agent of "recording" player
+		CBTS_LANGUAGE, // src_agent is text language
+		CBTS_GWBUILD, // src_agent is game build
+		CBTS_SHARDID, // src_agent is sever shard id
 		CBTS_REWARD, // src_agent is self, dst_agent is reward id, value is reward type. these are the wiggly boxes that you get
-		CBTS_BUFFINITIAL // combat event that will appear once per buff per agent on logging start (zero duration, buff==18)
+		CBTS_BUFFINITIAL, // combat event that will appear once per buff per agent on logging start (statechange==18, buff==18, normal cbtevent otherwise)
+		CBTS_POSITION, // src_agent changed, cast float* p = (float*)&dst_agent, access as x/y/z (float[3]) (not in realtime api)
+		CBTS_VELOCITY, // src_agent changed, cast float* v = (float*)&dst_agent, access as x/y/z (float[3]) (not in realtime api)
+		CBTS_FACING, // src_agent changed, cast float* f = (float*)&dst_agent, access as x/y (float[2]) (not in realtime api)
+		CBTS_TEAMCHANGE, // src_agent change, dst_agent new team id
+		CBTS_ATTACKTARGET, // src_agent is an attacktarget, dst_agent is the parent agent (gadget type), value is the current targetable state (not in realtime api)
+		CBTS_TARGETABLE, // dst_agent is new target-able state (0 = no, 1 = yes. default yes) (not in realtime api)
+		CBTS_MAPID, // src_agent is map id
+		CBTS_REPLINFO, // internal use, won't see anywhere
+		CBTS_STACKACTIVE, // src_agent is agent with buff, dst_agent is the stackid marked active
+		CBTS_STACKRESET // src_agent is agent with buff, value is the duration to reset to (also marks inactive), pad61- is the stackid
 	};
 
 	/* combat buff remove type */
@@ -79,7 +89,7 @@ namespace Revtc {
 		CBTB_MANUAL, // autoremoved by ooc or allstack (ignore for strip/cleanse calc, use for in/out volume)
 	};
 
-	struct CombatEvent {
+	struct CombatEventRev0 {
 		uint64_t time; /* timegettime() at time of event */
 		uint64_t src_agent; /* unique identifier */
 		uint64_t dst_agent; /* unique identifier */
@@ -110,11 +120,11 @@ namespace Revtc {
 		uint8_t is_statechange; /* from cbtstatechange enum */
 		uint8_t is_flanking; /* target agent was not facing source */
 		uint8_t is_shields; /* all or part damage was vs barrier/shield */
-		uint8_t result_local; /* internal tracking. garbage */
-		uint8_t ident_local; /* internal tracking. garbage */
+		uint8_t is_offcycle; /* zero if buff dmg happened during tick, non-zero otherwise */
+		uint8_t pad64; /* internal tracking. garbage */
 	};
 
-	struct CombatEventRev1 {
+	struct CombatEvent {
 		uint64_t time;
 		uint64_t src_agent;
 		uint64_t dst_agent;
@@ -138,10 +148,14 @@ namespace Revtc {
 		uint8_t is_flanking;
 		uint8_t is_shields;
 		uint8_t is_offcycle;
-		uint8_t pad61;
-		uint8_t pad62;
-		uint8_t pad63;
-		uint8_t pad64;
+		uint32_t buff_instid;
+	};
+
+	enum class AgentType {
+		Unknown,
+		Gadget,
+		Npc,
+		Player
 	};
 
 	struct Agent {
@@ -151,20 +165,23 @@ namespace Revtc {
 		int16_t toughness;
 		int16_t concentration;
 		int16_t healing;
-		int16_t pad1;
+		int16_t hitbox_width;
 		int16_t condition;
-		int16_t pad2;
+		int16_t hitbox_height;
 		std::string name;
 		uint16_t instance_id;
-		bool first_aware_set;
 		uint64_t first_aware;
+		bool first_aware_set;
 		uint64_t last_aware;
 		uint64_t master_addr;
-		uint16_t id;
+		AgentType agtype;
+		uint16_t species_id;
+		uint32_t direct_damage;
+		uint32_t boss_direct_damage;
+		uint32_t condi_damage;
+		uint32_t boss_condi_damage;
 		uint32_t hits;
-		bool is_player;
-		bool is_gadget;
-		bool is_character;
+		uint32_t note_counter;
 	};
 
 	struct Boon {
@@ -198,6 +215,8 @@ namespace Revtc {
 		uint16_t subgroup;
 		uint64_t first_aware;
 		uint64_t last_aware;
+
+		std::set<uint64_t> slaves;
 		
 		uint32_t physical_damage;
 		uint32_t condi_damage;
@@ -234,6 +253,7 @@ namespace Revtc {
 		std::string version;
 		uint8_t revision;
 		BossID area_id;
+		std::set<uint16_t> boss_ids;
 		std::string encounter_name;
 		bool valid;
 		std::string error;

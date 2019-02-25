@@ -40,6 +40,7 @@ namespace Revtc {
         log.version = std::string((char *)&buf[4], 8);
         log.revision = *(uint8_t*)&buf[12];
         log.area_id = (BossID) *(uint16_t*)&buf[13];
+		log.boss_ids.emplace(static_cast<uint16_t>(log.area_id));
         log.encounter_name = encounterName(log.area_id);
         log.valid = false;
         log.reward_at = 0;
@@ -60,16 +61,16 @@ namespace Revtc {
             agent.toughness = *(int16_t*)&buf[index]; index += sizeof(int16_t);
             agent.concentration = *(int16_t*)&buf[index]; index += sizeof(int16_t);
             agent.healing = *(int16_t*)&buf[index]; index += sizeof(int16_t);
-            agent.pad1 = *(int16_t*)&buf[index]; index += sizeof(int16_t);
+            agent.hitbox_width = *(int16_t*)&buf[index]; index += sizeof(int16_t);
             agent.condition = *(int16_t*)&buf[index]; index += sizeof(int16_t);
-            agent.pad2 = *(int16_t*)&buf[index]; index += sizeof(int16_t);
+            agent.hitbox_height = *(int16_t*)&buf[index]; index += sizeof(int16_t);
             char *name_buf = (char *)&buf[index];
             agent.name = std::string(name_buf); index += 64;
             index += 4; //align padding
 
             //Check for player and extract info
             if (agent.is_elite != 0xFFFFFFFF) {
-                agent.is_player = true;
+                agent.agtype = AgentType::Player;
 
                 Player player{};
                 player.addr = agent.addr;
@@ -110,13 +111,17 @@ namespace Revtc {
             }
             else {
                 if (uhf == 0xFFFF) {
-                    agent.is_gadget = true;
+                    agent.agtype = AgentType::Gadget;
+					//Special Handling for Deimos (who turns into a gadget at 10%)
+					if (log.area_id == BossID::DEIMOS && agent.name == "Deimos") {
+						log.boss_ids.emplace(lhf);
+					}
                 }
                 else {
-                    agent.is_character = true;
+                    agent.agtype = AgentType::Npc;
                 }
-                agent.id = lhf;
-                if (agent.id == (uint16_t)log.area_id) {
+                agent.species_id = lhf;
+                if (agent.species_id == (uint16_t)log.area_id) {
                     boss_addr = agent.addr;
                 }
             }
@@ -140,9 +145,9 @@ namespace Revtc {
         uint64_t first_event_time = 0;
         while (index < buf_len) {
             CombatEvent event;
-            if (log.revision == 1) {
-                CombatEventRev1 event_rev = *(CombatEventRev1*)&buf[index];
-                index += sizeof(CombatEventRev1);
+            if (log.revision == 0) {
+                CombatEventRev0 event_rev = *(CombatEventRev0*)&buf[index];
+                index += sizeof(CombatEventRev0);
 
                 event.time = event_rev.time;
                 event.src_agent = event_rev.src_agent;
@@ -165,6 +170,8 @@ namespace Revtc {
                 event.is_statechange = event_rev.is_statechange;
                 event.is_flanking = event_rev.is_flanking;
                 event.is_shields = event_rev.is_shields;
+				event.is_offcycle = event_rev.is_offcycle;
+				event.buff_instid = 0;
             }
             else {
                 event = *(CombatEvent*)&buf[index];
@@ -215,6 +222,10 @@ namespace Revtc {
                         uint64_t time_rel = event.time;
                         if (time_rel > master.first_aware && time_rel < master.last_aware) {
                             slave.master_addr = master.addr;
+							if (players.count(master.addr)) {
+								Player& player = players.at(master.addr);
+								player.slaves.emplace(slave.addr);
+							}
                         }
                     }
                 }
@@ -227,7 +238,6 @@ namespace Revtc {
             Agent *src = nullptr;
             Agent *dst = nullptr;
             Agent *master = nullptr;
-            bool redirected = false;
             if (agents.count(event.src_agent)) {
                 src = &agents.at(event.src_agent);
             }
@@ -235,18 +245,13 @@ namespace Revtc {
                 dst = &agents.at(event.dst_agent);
                 dst->hits++;
             }
-            if (src && src->master_addr) {
-                //Just attribute all slave damage to the master for now
-                src = &agents.at(src->master_addr);
-                redirected = true;
-            }
 
             if (event.is_statechange) {
                 if (event.is_statechange == CBTS_REWARD) {
                     log.reward_at = event.time;
                 }
                 else if (event.is_statechange == CBTS_CHANGEDEAD) {
-                    if (src && src->id == (uint16_t)log.area_id) {
+                    if (src && src->species_id == (uint16_t)log.area_id) {
                         log.boss_death = event.time;
                     }
                 }
@@ -255,7 +260,7 @@ namespace Revtc {
 
             }
             else if (event.is_buffremove) {
-                if (!redirected && src && src->is_player) {
+                if (src && src->agtype == AgentType::Player) {
                     Player& player = players.at(src->addr);
                     if (event.is_buffremove == CBTB_MANUAL) {
                         Boon boon = { true, event.time, event.value, event.time + event.value };
@@ -271,20 +276,15 @@ namespace Revtc {
             else {
                 if (event.buff) { //Buff
                     if (event.buff_dmg) {
-                        if (src && src->is_player) {
-                            Player& player = players.at(src->addr);
-                            player.condi_damage += event.buff_dmg;
-                            if (dst && dst->id == (uint16_t)log.area_id) {
-                                player.boss_condi_damage += event.buff_dmg;
-                            }
-                            //Special Handling for Deimos (who turns into a gadget at 10%)
-                            if (dst && log.area_id == BossID::DEIMOS && dst->id == 0x2113) {
-                                player.boss_condi_damage += event.buff_dmg;
+                        if (src) {
+                            src->condi_damage += event.buff_dmg;
+                            if (dst && log.boss_ids.count(dst->species_id)) {
+                                src->boss_condi_damage += event.buff_dmg;
                             }
                         }
                     }
                     else if (event.value) { //Buff Application
-                        if (dst && dst->is_player) {
+                        if (dst && dst->agtype == AgentType::Player) {
                             Player& player = players.at(dst->addr);
                             Boon boon = { false, event.time, event.value, event.time + event.value, event.overstack_value };
                             if (event.skillid == MIGHT) { //Might
@@ -298,28 +298,22 @@ namespace Revtc {
                     }
                 }
                 else { //Physical
-                    if (src && src->is_player) {
-                        Player& player = players.at(src->addr);
-                        player.physical_damage += event.value;
+                    if (src) {
+                        src->direct_damage += event.value;
                         if (dst) {
-                            if (dst->id == (uint16_t)log.area_id) {
-                                player.boss_physical_damage += event.value;
+                            if (log.boss_ids.count(dst->species_id)) {
+                                src->boss_direct_damage += event.value;
                             }
 
-                            //Special Handling for Deimos (who turns into a gadget at 10%)
-                            if (log.area_id == BossID::DEIMOS && dst->id == DEIMOS_STRUCTURE) {
-                                player.boss_physical_damage += event.value;
-                            }
-                                //Low-tech orb pusher detect on Keep Construct
-                            else if (log.area_id == BossID::KEEP_CONSTRUCT && dst->id == KC_CONSTRUCT_CORE) {
-                                player.note_counter++;
+							//Low-tech orb pusher detect on Keep Construct
+                            else if (log.area_id == BossID::KEEP_CONSTRUCT && dst->species_id == KC_CONSTRUCT_CORE) {
+                                src->note_counter++;
                             }
                         }
                     }
-                    else if (src && dst && dst->is_player) {
-                        if (log.area_id == BossID::DEIMOS && src->id == DEIMOS_HANDS) {
-                            Player& player = players.at(dst->addr);
-                            player.note_counter++;
+                    else if (src && dst) {
+                        if (log.area_id == BossID::DEIMOS && src->species_id == DEIMOS_HANDS) {
+                            src->note_counter++;
                         }
                     }
                 }
@@ -333,12 +327,30 @@ namespace Revtc {
         uint32_t tracked_count = 0;
 
         //Choose a time to set as the encounter end. This can have a significant effect on all the stats. For now, prefer the boss death > reward > boss lifetime.
-        uint64_t encounter_duration = log.boss_death ? log.boss_death : log.reward_at ? log.reward_at : log.boss_lifetime;
+        uint64_t encounter_duration =  log.reward_at ? log.reward_at : log.boss_death ? log.boss_death : log.boss_lifetime;
         float encounter_duration_secs = (float) encounter_duration / 1000.f;
         log.encounter_duration = encounter_duration / 1000u;
 
         for (auto& player_pair : players) {
             auto& player = player_pair.second;
+
+			if (agents.count(player.addr)) {
+				Agent& agent = agents.at(player.addr);
+				player.physical_damage = agent.direct_damage;
+				player.condi_damage = agent.condi_damage;
+				player.boss_physical_damage = agent.boss_direct_damage;
+				player.boss_condi_damage = agent.boss_condi_damage;
+			}
+			for (uint64_t slave_addr : player.slaves)
+			{
+				if (agents.count(slave_addr)) {
+					Agent& slave = agents.at(slave_addr);
+					player.physical_damage += slave.direct_damage;
+					player.condi_damage += slave.condi_damage;
+					player.boss_physical_damage += slave.boss_direct_damage;
+					player.boss_condi_damage += slave.boss_condi_damage;
+				}
+			}
             player.dps = roundf((float)(player.physical_damage + player.condi_damage) / encounter_duration_secs);
             player.boss_dps = roundf((float)(player.boss_physical_damage + player.boss_condi_damage) / encounter_duration_secs);
 
