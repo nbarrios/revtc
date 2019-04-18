@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <unordered_map>
 #include <queue>
 #include <set>
@@ -10,10 +11,18 @@ namespace Revtc {
 
 #define DEIMOS_HANDS 0x4345
 #define KC_CONSTRUCT_CORE 0x3F85
-#define MIGHT 0x2E4
-#define QUICKNESS 0x4A3
-#define ALACRITY 0x7678
-#define FURY 0x2D5
+//#define MIGHT 0x2E4
+//#define QUICKNESS 0x4A3
+//#define ALACRITY 0x7678
+//#define FURY 0x2D5
+
+	enum class BoonType : uint32_t {
+		UNKNOWN = 0,
+		MIGHT = 0x2E4,
+		QUICKNESS = 0x4A3,
+		ALACRITY = 0x7678,
+		FURY = 0x2D5,
+	};
 
 	enum class BossID : uint16_t {
 		VALE_GUARDIAN = 15438,
@@ -184,14 +193,23 @@ namespace Revtc {
 		uint32_t note_counter;
 	};
 
-	struct Boon {
-		bool is_removal;
-		uint64_t applied_at;
-		int32_t  duration;
-		uint64_t expires_at;
-		uint32_t overstack;
+	struct BoonStack {
+		uint64_t start_time;
+		uint64_t end_time;
+		uint64_t duration;
+		uint32_t buff_instid;
 
-		friend inline bool operator<(const Boon& lhs, const Boon& rhs);
+		friend inline bool operator<(const BoonStack& lhs, const BoonStack& rhs);
+	};
+
+	struct Boon {
+		uint32_t id;
+		std::string name;
+		bool intensity;
+		uint8_t max_stacks;
+		uint64_t last_seen;
+		std::vector<BoonStack> stacks;
+		std::map<uint64_t, uint16_t> events;
 	};
 
 	struct DurationStack {
@@ -226,6 +244,7 @@ namespace Revtc {
 		uint32_t boss_condi_damage;
 		uint32_t boss_dps;
 
+		std::map<BoonType, Boon> boons;
 		std::vector<Boon> might;
 		uint32_t might_accum;
 		uint32_t might_samples;
@@ -236,7 +255,7 @@ namespace Revtc {
 		float alacrity_avg;
 		float fury_avg;
 
-		std::unordered_map<uint16_t, DurationStack> duration_boons;
+		std::unordered_map<BoonType, DurationStack> duration_boons;
 
 		std::string note;
 		uint32_t note_counter;
@@ -260,6 +279,8 @@ namespace Revtc {
 
 		std::vector<Player> players;
 		uint64_t reward_at;
+		uint64_t log_start;
+		uint64_t log_end;
 		uint64_t boss_lifetime;
 		uint64_t boss_death;
 		uint64_t encounter_duration;
@@ -270,7 +291,6 @@ namespace Revtc {
 		const unsigned char* buf;
 		size_t buf_len;
 		uint64_t boss_addr;
-		uint64_t last_event_time;
 	public:
 		std::unordered_map<uint64_t, Agent> agents;
 		std::unordered_map<uint16_t, uint64_t> agent_addrs;
@@ -282,10 +302,12 @@ namespace Revtc {
 		~Parser();
 
 		Log parse();
-		void calcBoons(uint64_t encounter_duration);
+		void apply_boonstack(Boon& boon, const CombatEvent& event);
+		void calcBoons(uint64_t log_start, uint64_t encounter_duration);
 		std::string encounterName(BossID area_id);
 		std::pair<std::string, std::string> professionName(uint32_t prof);
 		std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
+		BoonType skillidToBoonType(uint32_t id);
 	};
 
 }

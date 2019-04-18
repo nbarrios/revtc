@@ -3,20 +3,18 @@
 #include <numeric>
 
 namespace Revtc {
-
-    inline bool operator<(const Player& lhs, const Player& rhs) {
+	inline bool operator<(const Player& lhs, const Player& rhs) {
         return lhs.subgroup < rhs.subgroup;
     }
 
-    inline bool operator<(const Boon& lhs, const Boon& rhs) {
-        return lhs.duration < rhs.duration;
+    inline bool operator<(const BoonStack& lhs, const BoonStack& rhs) {
+        return lhs.duration > rhs.duration;
     }
 
     Parser::Parser(const unsigned char * buf, size_t len)
             : buf(buf)
             , buf_len(len)
             , boss_addr(0)
-            , last_event_time(UINT64_MAX)
     {
     }
 
@@ -41,6 +39,9 @@ namespace Revtc {
         log.revision = *(uint8_t*)&buf[12];
         log.area_id = (BossID) *(uint16_t*)&buf[13];
 		log.boss_ids.emplace(static_cast<uint16_t>(log.area_id));
+		if (log.area_id == BossID::NIKARE) {
+			log.boss_ids.emplace(static_cast<uint16_t>(BossID::KENUT));
+		}
         log.encounter_name = encounterName(log.area_id);
         log.valid = false;
         log.reward_at = 0;
@@ -95,17 +96,37 @@ namespace Revtc {
                 player.elite_spec_name = elite.first;
                 player.elite_spec_name_short = elite.second;
 
-                player.might_accum = 0;
-                player.might_samples = 0;
+				Boon might = Boon{
+					(uint32_t) BoonType::MIGHT,
+					"Might",
+					true,
+					25,
+				};
+				player.boons.emplace(BoonType::MIGHT, might);
 
-                DurationStack quickness{};
-                player.duration_boons.emplace(QUICKNESS, quickness);
+				Boon quickness = Boon{
+					(uint32_t) BoonType::QUICKNESS,
+					"Quickness",
+					false,
+					5,
+				};
+				player.boons.emplace(BoonType::QUICKNESS, quickness);
 
-                DurationStack alacrity{};
-                player.duration_boons.emplace(ALACRITY, quickness);
+				Boon alacrity = Boon{
+					(uint32_t)BoonType::ALACRITY,
+					"Alacrity",
+					false,
+					9,
+				};
+				player.boons.emplace(BoonType::ALACRITY, alacrity);
 
-                DurationStack fury{};
-                player.duration_boons.emplace(FURY, quickness);
+				Boon fury = Boon{
+					(uint32_t)BoonType::FURY,
+					"Fury",
+					false,
+					9,
+				};
+				player.boons.emplace(BoonType::FURY, fury);
 
                 players.emplace(player.addr, player);
             }
@@ -142,7 +163,6 @@ namespace Revtc {
 
         //Events
         //First iteration - create CombatEvents
-        uint64_t first_event_time = 0;
         while (index < buf_len) {
             CombatEvent event;
             if (log.revision == 0) {
@@ -179,12 +199,11 @@ namespace Revtc {
             }
 
             if (event.is_statechange == CBTS_LOGSTART) {
-                first_event_time = event.time;
+				log.log_start = event.time;
             }
             else if (event.is_statechange == CBTS_LOGEND) {
-                last_event_time = event.time - first_event_time;
+				log.log_end = event.time;
             }
-            event.time -= first_event_time;
 
             //Assign times and instance ids
             if (agents.count(event.src_agent)) {
@@ -208,6 +227,9 @@ namespace Revtc {
             const Agent& agent = agents.at(player.second.addr);
             player.second.first_aware = agent.first_aware;
             player.second.last_aware = agent.last_aware;
+			for (auto& boon : player.second.boons) {
+				boon.second.last_seen = log.log_start;
+			}
         }
 
         // Second iteration
@@ -259,19 +281,37 @@ namespace Revtc {
             else if (event.is_activation) {
 
             }
-            else if (event.is_buffremove) {
-                if (src && src->agtype == AgentType::Player) {
-                    Player& player = players.at(src->addr);
-                    if (event.is_buffremove == CBTB_MANUAL) {
-                        Boon boon = { true, event.time, event.value, event.time + event.value };
-                        if (event.skillid == MIGHT) { //Might
-                            player.might.push_back(boon);
-                        }
-                        else if (event.skillid == QUICKNESS) {
-                            //player.quickness.push_back(boon);
-                        }
-                    }
-                }
+			else if (event.is_buffremove) {
+				if (src && src->agtype == AgentType::Player) {
+					Player& player = players.at(src->addr);
+
+					BoonType type = skillidToBoonType(event.skillid);
+
+					if (player.boons.count(type)) {
+						Boon& boon = player.boons.at(type);
+						if (event.is_buffremove == CBTB_ALL) {
+							boon.stacks.clear();
+						}
+						else if (event.is_buffremove == CBTB_SINGLE) {
+							int i = 0;
+							while (i != boon.stacks.size()) {
+								BoonStack& stack = boon.stacks.at(i);
+								if (stack.buff_instid == event.buff_instid) {
+									boon.stacks.erase(boon.stacks.begin() + i);
+									break;
+								}
+								++i;
+							}
+						}
+
+						if (boon.events.count(event.time)) {
+							boon.events.at(event.time) = (uint16_t) boon.stacks.size();
+						}
+						else {
+							boon.events.emplace(event.time, boon.stacks.size());
+						}
+					}
+				}
             }
             else {
                 if (event.buff) { //Buff
@@ -284,16 +324,24 @@ namespace Revtc {
                         }
                     }
                     else if (event.value) { //Buff Application
-                        if (dst && dst->agtype == AgentType::Player) {
-                            Player& player = players.at(dst->addr);
-                            Boon boon = { false, event.time, event.value, event.time + event.value, event.overstack_value };
-                            if (event.skillid == MIGHT) { //Might
-                                player.might.push_back(boon);
-                            }
-                            else if (player.duration_boons.count(event.skillid)) {
-                                DurationStack& stack = player.duration_boons.at(event.skillid);
-                                stack.boon.push_back(boon);
-                            }
+						Agent *destination = nullptr;
+
+						//Boon extension events have no dst
+						if (src != dst) {
+							destination = dst;
+						}
+						else {
+							destination = src;
+						}
+
+                        if (destination && destination->agtype == AgentType::Player) {
+                            Player& player = players.at(destination->addr);
+							BoonType type = skillidToBoonType(event.skillid);
+
+							if (player.boons.count(type)) {
+								Boon& boon = player.boons.at(type);
+								apply_boonstack(boon, event);
+							}
                         }
                     }
                 }
@@ -326,8 +374,10 @@ namespace Revtc {
         std::string tracked_player_name;
         uint32_t tracked_count = 0;
 
-        //Choose a time to set as the encounter end. This can have a significant effect on all the stats. For now, prefer the boss death > reward > boss lifetime.
-        uint64_t encounter_duration =  log.reward_at ? log.reward_at : log.boss_death ? log.boss_death : log.boss_lifetime;
+        // Choose a time to set as the encounter end. This can have a significant effect on all the stats.
+		// For now, prefer the reward > boss death > boss lifetime.
+        uint64_t encounter_end =  log.reward_at ? log.reward_at : log.boss_death ? log.boss_death : log.boss_lifetime;
+		uint64_t encounter_duration = encounter_end - log.log_start;
         float encounter_duration_secs = (float) encounter_duration / 1000.f;
         log.encounter_duration = encounter_duration / 1000u;
 
@@ -351,8 +401,8 @@ namespace Revtc {
 					player.boss_condi_damage += slave.boss_condi_damage;
 				}
 			}
-            player.dps = roundf((float)(player.physical_damage + player.condi_damage) / encounter_duration_secs);
-            player.boss_dps = roundf((float)(player.boss_physical_damage + player.boss_condi_damage) / encounter_duration_secs);
+            player.dps = (uint32_t) roundf((float)(player.physical_damage + player.condi_damage) / encounter_duration_secs);
+            player.boss_dps = (uint32_t) roundf((float)(player.boss_physical_damage + player.boss_condi_damage) / encounter_duration_secs);
 
             //Notes
             if (log.area_id == BossID::KEEP_CONSTRUCT || log.area_id == BossID::DEIMOS) {
@@ -363,7 +413,7 @@ namespace Revtc {
             }
         }
 
-        calcBoons(encounter_duration);
+        calcBoons(log.log_start, encounter_duration);
 
         for (auto& player_pair : players) {
             auto& player = player_pair.second;
@@ -388,97 +438,184 @@ namespace Revtc {
         return log;
     }
 
-    void Parser::calcBoons(uint64_t encounter_duration) {
-        uint32_t step = 1000;
-        for (uint64_t time = step; time < encounter_duration; time = time + step) {
-            for (auto& player_pair : players) {
-                auto& player = player_pair.second;
+	void Parser::apply_boonstack(Boon& boon, const CombatEvent& event) {
+		// Stack Extension
+		if (event.is_offcycle) {
+			for (BoonStack& stack : boon.stacks) {
+				if (stack.buff_instid == event.buff_instid) {
+					stack.end_time += event.value;
+					stack.duration = stack.end_time - event.time;
+					break;
+				}
+			}
+		}
+		else { // New Stack
+			if (boon.stacks.size() < boon.max_stacks) {
+				BoonStack stack = BoonStack{
+					event.time,
+					event.time + event.value,
+					static_cast<uint64_t>(event.value),
+					event.buff_instid
+				};
+				boon.stacks.push_back(stack);
+			}
+		}
 
-                { //Might
-                    uint16_t current_might = 0;
-                    uint16_t stacks_deleted = 0;
-                    for (auto it = player.might.begin(); it != player.might.end();) {
-                        Boon& boon = (*it);
-                        if (!boon.is_removal) {
-                            //Remove expired stack
-                            if (boon.expires_at < time) {
-                                it = player.might.erase(it);
-                                continue;
-                            }
-                                //Future stack, break loop
-                            else if (boon.applied_at > time) {
-                                break;
-                            }
-                            //Valid stack
-                            current_might = std::min(25, current_might + 1);
-                            ++it;
-                        }
-                        else {
-                            //In order to get similar results to the online parsers, we're going to ignore boon removal
-                            it = player.might.erase(it);
-                            continue;
-                        }
-                    }
-                    //Now we know how many might stacks we had at this point
-                    player.might_accum += current_might;
-                    player.might_samples++;
-                    player.might_points.push_back((float)current_might);
-                }
+		int i = 0;
+		while (i != boon.stacks.size()) {
+			BoonStack& stack = boon.stacks[i];
+			if (stack.end_time < event.time) {
+				stack.duration = 0;
+			}
+			else {
+				stack.duration = stack.end_time - event.time;
+			}
 
-                for (auto& pair : player.duration_boons)
-                {
-                    DurationStack& stack = pair.second;
-                    if (!stack.boon_queue.empty()) {
-                        Boon& boon = stack.boon_queue.back();
-                        boon.duration -= step;
-                        if (boon.duration <= 0) {
-                            stack.boon_queue.pop_back();
-                        }
-                    }
-                    for (auto it = stack.boon.begin(); it != stack.boon.end(); ) {
-                        Boon& boon = (*it);
-                        if (!boon.is_removal) {
-                            //Future stack, break loop
-                            if (boon.applied_at > time) {
-                                break;
-                            }
-                            boon.duration -= time - boon.applied_at;
-                            // Just a quick check that the stack isn't expired by the time we are applying it
-                            // could happen if we use larger than 1 sec time samples
-                            if (boon.duration > 0) {
-                                stack.boon_queue.push_back(boon);
-                                std::sort(stack.boon_queue.begin(), stack.boon_queue.end(), std::less<Boon>());
-                            }
-                        }
-                        it = stack.boon.erase(it);
-                    }
-                    stack.boon_accum += stack.boon_queue.size() > 0 ? 1 : 0;
-                    stack.boon_samples++;
-                }
-            }
-        }
+			if (stack.duration == 0) {
+				boon.stacks.erase(boon.stacks.begin() + i);
+			}
+			else {
+				i += 1;
+			}
+		}
+		std::sort(boon.stacks.begin(), boon.stacks.end());
+		if (boon.events.count(event.time)) {
+			boon.events.at(event.time) = (uint16_t) boon.stacks.size();
+		}
+		else {
+			boon.events.emplace(event.time, (uint16_t) boon.stacks.size());
+		}
+	}
 
-        for (auto& player_pair : players) {
-            auto& player = player_pair.second;
-            player.might_avg = (float)player.might_accum / (float)player.might_samples;
+    void Parser::calcBoons(uint64_t log_start, uint64_t encounter_duration) {
+		for (auto& player_pair : players) {
+			auto& player = player_pair.second;
 
-            if (player.duration_boons.count(QUICKNESS)) {
-                const DurationStack& stack = player.duration_boons.at(QUICKNESS);
-                player.quickness_avg = (float)stack.boon_accum / (float)stack.boon_samples;
-            }
+			{ // Might
+				Boon& might = player.boons.at(BoonType::MIGHT);
+				uint64_t total = 0;
+				uint64_t current_time = log_start;
+				uint16_t current_val = 0;
+				for (auto& event_pairs : might.events) {
+					uint64_t time = event_pairs.first;
+					if (time > log_start + encounter_duration - 50) {
+						continue;
+					}
+					total += current_val * ((time - 1) - current_time);
+					current_val = event_pairs.second;
+					current_time = time;
+				}
+				player.might_avg = (float)total / (float)encounter_duration;
+			}
 
-            if (player.duration_boons.count(ALACRITY)) {
-                const DurationStack& stack = player.duration_boons.at(ALACRITY);
-                player.alacrity_avg = (float)stack.boon_accum / (float)stack.boon_samples;
-            }
+			{ // Quickness
+				Boon& quickness = player.boons.at(BoonType::QUICKNESS);
+				uint64_t total = 0;
+				uint64_t current_time = log_start;
+				uint16_t current_val = 0;
+				for (auto& event_pairs : quickness.events) {
+					uint64_t time = event_pairs.first;
+					if (time > log_start + encounter_duration - 50) {
+						continue;
+					}
+					total += (current_val ? 1:0) * ((time - 1) - current_time);
+					current_val = event_pairs.second;
+					current_time = time;
+				}
+				player.quickness_avg = (float)total / (float)encounter_duration;
+			}
+		}
 
-            if (player.duration_boons.count(FURY)) {
-                const DurationStack& stack = player.duration_boons.at(FURY);
-                player.fury_avg = (float)stack.boon_accum / (float)stack.boon_samples;
-            }
+        //uint32_t step = 1000;
+        //for (uint64_t time = step; time < encounter_duration; time = time + step) {
+        //    for (auto& player_pair : players) {
+        //        auto& player = player_pair.second;
 
-            player.duration_boons.clear();
-        }
+        //        { //Might
+        //            uint16_t current_might = 0;
+        //            uint16_t stacks_deleted = 0;
+        //            for (auto it = player.might.begin(); it != player.might.end();) {
+        //                Boon& boon = (*it);
+        //                if (!boon.is_removal) {
+        //                    //Remove expired stack
+        //                    if (boon.expires_at < time) {
+        //                        it = player.might.erase(it);
+        //                        continue;
+        //                    }
+        //                        //Future stack, break loop
+        //                    else if (boon.applied_at > time) {
+        //                        break;
+        //                    }
+        //                    //Valid stack
+        //                    current_might = std::min(25, current_might + 1);
+        //                    ++it;
+        //                }
+        //                else {
+        //                    //In order to get similar results to the online parsers, we're going to ignore boon removal
+        //                    it = player.might.erase(it);
+        //                    continue;
+        //                }
+        //            }
+        //            //Now we know how many might stacks we had at this point
+        //            player.might_accum += current_might;
+        //            player.might_samples++;
+        //            player.might_points.push_back((float)current_might);
+        //        }
+
+        //        for (auto& pair : player.duration_boons)
+        //        {
+        //            DurationStack& stack = pair.second;
+        //            if (!stack.boon_queue.empty()) {
+        //                Boon& boon = stack.boon_queue.back();
+        //                boon.duration -= step;
+        //                if (boon.duration <= 0) {
+        //                    stack.boon_queue.pop_back();
+        //                }
+        //            }
+        //            for (auto it = stack.boon.begin(); it != stack.boon.end(); ) {
+        //                Boon& boon = (*it);
+        //                if (!boon.is_removal) {
+        //                    //Future stack, break loop
+        //                    if (boon.applied_at > time) {
+        //                        break;
+        //                    }
+        //                    boon.duration -= time - boon.applied_at;
+        //                    // Just a quick check that the stack isn't expired by the time we are applying it
+        //                    // could happen if we use larger than 1 sec time samples
+        //                    if (boon.duration > 0) {
+        //                        stack.boon_queue.push_back(boon);
+        //                        std::sort(stack.boon_queue.begin(), stack.boon_queue.end(), std::less<Boon>());
+        //                    }
+        //                }
+        //                it = stack.boon.erase(it);
+        //            }
+        //            stack.boon_accum += stack.boon_queue.size() > 0 ? 1 : 0;
+        //            stack.boon_samples++;
+        //        }
+        //    }
+        //}
+
+        //for (auto& player_pair : players) {
+        //    auto& player = player_pair.second;
+        //    player.might_avg = (float)player.might_accum / (float)player.might_samples;
+
+        //    if (player.duration_boons.count(QUICKNESS)) {
+        //        const DurationStack& stack = player.duration_boons.at(QUICKNESS);
+        //        player.quickness_avg = (float)stack.boon_accum / (float)stack.boon_samples;
+        //    }
+
+        //    if (player.duration_boons.count(ALACRITY)) {
+        //        const DurationStack& stack = player.duration_boons.at(ALACRITY);
+        //        player.alacrity_avg = (float)stack.boon_accum / (float)stack.boon_samples;
+        //    }
+
+        //    if (player.duration_boons.count(FURY)) {
+        //        const DurationStack& stack = player.duration_boons.at(FURY);
+        //        player.fury_avg = (float)stack.boon_accum / (float)stack.boon_samples;
+        //    }
+
+        //    player.duration_boons.clear();
+        //}
     }
 
     std::string Parser::encounterName(BossID area_id)
@@ -623,5 +760,28 @@ namespace Revtc {
                 break;
         }
     }
+
+	BoonType Parser::skillidToBoonType(uint32_t id)
+	{
+		// ugly but faster than a more generic checked cast
+		BoonType type;
+		switch (id) {
+			case (uint32_t)BoonType::MIGHT:
+				type = BoonType::MIGHT;
+				break;
+			case (uint32_t)BoonType::QUICKNESS:
+				type = BoonType::QUICKNESS;
+				break;
+			case (uint32_t)BoonType::ALACRITY:
+				type = BoonType::ALACRITY;
+				break;
+			case (uint32_t)BoonType::FURY:
+				type = BoonType::FURY;
+				break;
+			default:
+				type = BoonType::UNKNOWN;
+		};
+		return type;
+	}
 
 }
