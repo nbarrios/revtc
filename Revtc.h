@@ -198,6 +198,7 @@ namespace Revtc {
 		uint64_t end_time;
 		uint64_t duration;
 		uint32_t buff_instid;
+		bool is_clear;
 
 		friend inline bool operator<(const BoonStack& lhs, const BoonStack& rhs);
 	};
@@ -245,17 +246,11 @@ namespace Revtc {
 		uint32_t boss_dps;
 
 		std::map<BoonType, Boon> boons;
-		std::vector<Boon> might;
-		uint32_t might_accum;
-		uint32_t might_samples;
-		std::vector<float> might_points;
-		float might_avg;
 
+		float might_avg;
 		float quickness_avg;
 		float alacrity_avg;
 		float fury_avg;
-
-		std::unordered_map<BoonType, DurationStack> duration_boons;
 
 		std::string note;
 		uint32_t note_counter;
@@ -302,7 +297,7 @@ namespace Revtc {
 		~Parser();
 
 		Log parse();
-		void apply_boonstack(Boon& boon, const CombatEvent& event);
+		void apply_boonstack(Boon& boon, const CombatEvent& event, const Player& player);
 		void calcBoons(uint64_t log_start, uint64_t encounter_duration);
 		std::string encounterName(BossID area_id);
 		std::pair<std::string, std::string> professionName(uint32_t prof);

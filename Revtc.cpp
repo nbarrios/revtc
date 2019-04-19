@@ -340,7 +340,7 @@ namespace Revtc {
 
 							if (player.boons.count(type)) {
 								Boon& boon = player.boons.at(type);
-								apply_boonstack(boon, event);
+								apply_boonstack(boon, event, player);
 							}
                         }
                     }
@@ -438,7 +438,7 @@ namespace Revtc {
         return log;
     }
 
-	void Parser::apply_boonstack(Boon& boon, const CombatEvent& event) {
+	void Parser::apply_boonstack(Boon& boon, const CombatEvent& event, const Player& player) {
 		// Stack Extension
 		if (event.is_offcycle) {
 			for (BoonStack& stack : boon.stacks) {
@@ -448,6 +448,7 @@ namespace Revtc {
 					break;
 				}
 			}
+			std::sort(boon.stacks.begin(), boon.stacks.end());
 		}
 		else { // New Stack
 			if (boon.stacks.size() < boon.max_stacks) {
@@ -458,27 +459,55 @@ namespace Revtc {
 					event.buff_instid
 				};
 				boon.stacks.push_back(stack);
+				std::sort(boon.stacks.begin(), boon.stacks.end());
 			}
 		}
 
-		int i = 0;
-		while (i != boon.stacks.size()) {
-			BoonStack& stack = boon.stacks[i];
-			if (stack.end_time < event.time) {
-				stack.duration = 0;
-			}
-			else {
-				stack.duration = stack.end_time - event.time;
-			}
+		if (boon.intensity) {
+			int i = 0;
+			while (i != boon.stacks.size()) {
+				BoonStack& stack = boon.stacks[i];
+				if (stack.end_time < event.time) {
+					stack.duration = 0;
+				}
+				else {
+					stack.duration = stack.end_time - event.time;
+				}
 
-			if (stack.duration == 0) {
-				boon.stacks.erase(boon.stacks.begin() + i);
-			}
-			else {
-				i += 1;
+				if (stack.duration == 0) {
+					boon.stacks.erase(boon.stacks.begin() + i);
+				}
+				else {
+					i += 1;
+				}
 			}
 		}
-		std::sort(boon.stacks.begin(), boon.stacks.end());
+		else {
+			if (!boon.stacks.empty()) {
+				BoonStack& stack = boon.stacks.front();
+				
+				if (stack.end_time < event.time) {
+					stack.duration = 0;
+				}
+				else {
+					stack.duration = stack.end_time - event.time;
+				}
+
+				if (stack.duration == 0) {
+					boon.stacks.erase(boon.stacks.begin());
+				}
+
+				int i = 1;
+				while (i < boon.stacks.size()) {
+					BoonStack& update_stack = boon.stacks[i];
+					update_stack.start_time = event.time;
+					update_stack.end_time = event.time + update_stack.duration;
+					i++;
+
+				}
+			}
+		}
+
 		if (boon.events.count(event.time)) {
 			boon.events.at(event.time) = (uint16_t) boon.stacks.size();
 		}
