@@ -227,9 +227,6 @@ namespace Revtc {
             const Agent& agent = agents.at(player.second.addr);
             player.second.first_aware = agent.first_aware;
             player.second.last_aware = agent.last_aware;
-			for (auto& boon : player.second.boons) {
-				boon.second.last_seen = log.log_start;
-			}
         }
 
         // Second iteration
@@ -290,25 +287,12 @@ namespace Revtc {
 					if (player.boons.count(type)) {
 						Boon& boon = player.boons.at(type);
 						if (event.is_buffremove == CBTB_ALL) {
-							boon.stacks.clear();
+							BoonStack stack = BoonStack(event.time, 0, false, 0, true);
+							boon.stacks.push_back(stack);
 						}
 						else if (event.is_buffremove == CBTB_SINGLE) {
-							int i = 0;
-							while (i != boon.stacks.size()) {
-								BoonStack& stack = boon.stacks.at(i);
-								if (stack.buff_instid == event.buff_instid) {
-									boon.stacks.erase(boon.stacks.begin() + i);
-									break;
-								}
-								++i;
-							}
-						}
-
-						if (boon.events.count(event.time)) {
-							boon.events.at(event.time) = (uint16_t) boon.stacks.size();
-						}
-						else {
-							boon.events.emplace(event.time, boon.stacks.size());
+							BoonStack stack = BoonStack(event.time, 0, false, event.buff_instid, true);
+							boon.stacks.push_back(stack);
 						}
 					}
 				}
@@ -340,7 +324,9 @@ namespace Revtc {
 
 							if (player.boons.count(type)) {
 								Boon& boon = player.boons.at(type);
-								apply_boonstack(boon, event, player);
+								BoonStack stack = BoonStack(event.time, event.value,
+									event.is_offcycle, event.buff_instid);
+								boon.stacks.push_back(stack);
 							}
                         }
                     }
@@ -413,7 +399,7 @@ namespace Revtc {
             }
         }
 
-        calcBoons(log.log_start, encounter_duration);
+		replay_boons(log.log_start, encounter_duration);
 
         for (auto& player_pair : players) {
             auto& player = player_pair.second;
@@ -430,6 +416,25 @@ namespace Revtc {
                 }
             }
 
+			for (const auto& boon_pair : player.boons) {
+				switch (boon_pair.first) {
+					case BoonType::MIGHT:
+						player.might_avg = boon_pair.second.average;
+						break;
+					case BoonType::QUICKNESS:
+						player.quickness_avg = boon_pair.second.average;
+						break;
+					case BoonType::ALACRITY:
+						player.alacrity_avg = boon_pair.second.average;
+						break;
+					case BoonType::FURY:
+						player.fury_avg = boon_pair.second.average;
+						break;
+					default:
+						break;
+				}
+			}
+
             log.players.push_back(player);
         }
         std::sort(log.players.begin(), log.players.end(), std::less<Player>());
@@ -438,214 +443,54 @@ namespace Revtc {
         return log;
     }
 
-	void Parser::apply_boonstack(Boon& boon, const CombatEvent& event, const Player& player) {
-		// Stack Extension
-		if (event.is_offcycle) {
-			for (BoonStack& stack : boon.stacks) {
-				if (stack.buff_instid == event.buff_instid) {
-					stack.end_time += event.value;
-					stack.duration = stack.end_time - event.time;
-					break;
+	void Parser::replay_boons(uint64_t log_start, uint64_t encounter_duration)
+	{
+		for (auto& player_pair : players) {
+			Player& player = player_pair.second;
+			for (auto& boon_pair : player.boons) {
+				Boon& boon = boon_pair.second;
+				size_t track_index = 0;
+				uint64_t stacks_total = 0;
+				for (uint64_t time = log_start; time < log_start + encounter_duration - 50; ++time) {
+					while (track_index < boon.stacks.size()) {
+						BoonStack& stack = boon.stacks[track_index];
+						if (stack.start_time == time) {
+							if (stack.is_clear) {
+								if (stack.buff_instid) {
+									int i = 0;
+									while (i != boon.replay.size()) {
+										BoonStack &existing_stack = boon.replay[i];
+										if (existing_stack.buff_instid == stack.buff_instid) {
+											boon.replay.erase(boon.replay.begin() + i);
+											break;
+										}
+										++i;
+									}
+								}
+								else {
+									boon.replay.clear();
+								}
+							}
+							else if (!stack.is_offcycle) {
+								boon.replay.push_back(stack);
+							}
+							++track_index;
+							continue;
+						}
+						break;
+					}
+
+					if (boon.intensity) {
+						stacks_total += boon.replay.size();
+					}
+					else if (boon.replay.size()) {
+						++stacks_total;
+					}
 				}
+				boon.average = (float) stacks_total / (float) encounter_duration;
 			}
-			std::sort(boon.stacks.begin(), boon.stacks.end());
-		}
-		else { // New Stack
-			if (boon.stacks.size() < boon.max_stacks) {
-				BoonStack stack = BoonStack{
-					event.time,
-					event.time + event.value,
-					static_cast<uint64_t>(event.value),
-					event.buff_instid
-				};
-				boon.stacks.push_back(stack);
-				std::sort(boon.stacks.begin(), boon.stacks.end());
-			}
-		}
-
-		if (boon.intensity) {
-			int i = 0;
-			while (i != boon.stacks.size()) {
-				BoonStack& stack = boon.stacks[i];
-				if (stack.end_time < event.time) {
-					stack.duration = 0;
-				}
-				else {
-					stack.duration = stack.end_time - event.time;
-				}
-
-				if (stack.duration == 0) {
-					boon.stacks.erase(boon.stacks.begin() + i);
-				}
-				else {
-					i += 1;
-				}
-			}
-		}
-		else {
-			if (!boon.stacks.empty()) {
-				BoonStack& stack = boon.stacks.front();
-				
-				if (stack.end_time < event.time) {
-					stack.duration = 0;
-				}
-				else {
-					stack.duration = stack.end_time - event.time;
-				}
-
-				if (stack.duration == 0) {
-					boon.stacks.erase(boon.stacks.begin());
-				}
-
-				int i = 1;
-				while (i < boon.stacks.size()) {
-					BoonStack& update_stack = boon.stacks[i];
-					update_stack.start_time = event.time;
-					update_stack.end_time = event.time + update_stack.duration;
-					i++;
-
-				}
-			}
-		}
-
-		if (boon.events.count(event.time)) {
-			boon.events.at(event.time) = (uint16_t) boon.stacks.size();
-		}
-		else {
-			boon.events.emplace(event.time, (uint16_t) boon.stacks.size());
 		}
 	}
-
-    void Parser::calcBoons(uint64_t log_start, uint64_t encounter_duration) {
-		for (auto& player_pair : players) {
-			auto& player = player_pair.second;
-
-			{ // Might
-				Boon& might = player.boons.at(BoonType::MIGHT);
-				uint64_t total = 0;
-				uint64_t current_time = log_start;
-				uint16_t current_val = 0;
-				for (auto& event_pairs : might.events) {
-					uint64_t time = event_pairs.first;
-					if (time > log_start + encounter_duration - 50) {
-						continue;
-					}
-					total += current_val * ((time - 1) - current_time);
-					current_val = event_pairs.second;
-					current_time = time;
-				}
-				player.might_avg = (float)total / (float)encounter_duration;
-			}
-
-			{ // Quickness
-				Boon& quickness = player.boons.at(BoonType::QUICKNESS);
-				uint64_t total = 0;
-				uint64_t current_time = log_start;
-				uint16_t current_val = 0;
-				for (auto& event_pairs : quickness.events) {
-					uint64_t time = event_pairs.first;
-					if (time > log_start + encounter_duration - 50) {
-						continue;
-					}
-					total += (current_val ? 1:0) * ((time - 1) - current_time);
-					current_val = event_pairs.second;
-					current_time = time;
-				}
-				player.quickness_avg = (float)total / (float)encounter_duration;
-			}
-		}
-
-        //uint32_t step = 1000;
-        //for (uint64_t time = step; time < encounter_duration; time = time + step) {
-        //    for (auto& player_pair : players) {
-        //        auto& player = player_pair.second;
-
-        //        { //Might
-        //            uint16_t current_might = 0;
-        //            uint16_t stacks_deleted = 0;
-        //            for (auto it = player.might.begin(); it != player.might.end();) {
-        //                Boon& boon = (*it);
-        //                if (!boon.is_removal) {
-        //                    //Remove expired stack
-        //                    if (boon.expires_at < time) {
-        //                        it = player.might.erase(it);
-        //                        continue;
-        //                    }
-        //                        //Future stack, break loop
-        //                    else if (boon.applied_at > time) {
-        //                        break;
-        //                    }
-        //                    //Valid stack
-        //                    current_might = std::min(25, current_might + 1);
-        //                    ++it;
-        //                }
-        //                else {
-        //                    //In order to get similar results to the online parsers, we're going to ignore boon removal
-        //                    it = player.might.erase(it);
-        //                    continue;
-        //                }
-        //            }
-        //            //Now we know how many might stacks we had at this point
-        //            player.might_accum += current_might;
-        //            player.might_samples++;
-        //            player.might_points.push_back((float)current_might);
-        //        }
-
-        //        for (auto& pair : player.duration_boons)
-        //        {
-        //            DurationStack& stack = pair.second;
-        //            if (!stack.boon_queue.empty()) {
-        //                Boon& boon = stack.boon_queue.back();
-        //                boon.duration -= step;
-        //                if (boon.duration <= 0) {
-        //                    stack.boon_queue.pop_back();
-        //                }
-        //            }
-        //            for (auto it = stack.boon.begin(); it != stack.boon.end(); ) {
-        //                Boon& boon = (*it);
-        //                if (!boon.is_removal) {
-        //                    //Future stack, break loop
-        //                    if (boon.applied_at > time) {
-        //                        break;
-        //                    }
-        //                    boon.duration -= time - boon.applied_at;
-        //                    // Just a quick check that the stack isn't expired by the time we are applying it
-        //                    // could happen if we use larger than 1 sec time samples
-        //                    if (boon.duration > 0) {
-        //                        stack.boon_queue.push_back(boon);
-        //                        std::sort(stack.boon_queue.begin(), stack.boon_queue.end(), std::less<Boon>());
-        //                    }
-        //                }
-        //                it = stack.boon.erase(it);
-        //            }
-        //            stack.boon_accum += stack.boon_queue.size() > 0 ? 1 : 0;
-        //            stack.boon_samples++;
-        //        }
-        //    }
-        //}
-
-        //for (auto& player_pair : players) {
-        //    auto& player = player_pair.second;
-        //    player.might_avg = (float)player.might_accum / (float)player.might_samples;
-
-        //    if (player.duration_boons.count(QUICKNESS)) {
-        //        const DurationStack& stack = player.duration_boons.at(QUICKNESS);
-        //        player.quickness_avg = (float)stack.boon_accum / (float)stack.boon_samples;
-        //    }
-
-        //    if (player.duration_boons.count(ALACRITY)) {
-        //        const DurationStack& stack = player.duration_boons.at(ALACRITY);
-        //        player.alacrity_avg = (float)stack.boon_accum / (float)stack.boon_samples;
-        //    }
-
-        //    if (player.duration_boons.count(FURY)) {
-        //        const DurationStack& stack = player.duration_boons.at(FURY);
-        //        player.fury_avg = (float)stack.boon_accum / (float)stack.boon_samples;
-        //    }
-
-        //    player.duration_boons.clear();
-        //}
-    }
 
     std::string Parser::encounterName(BossID area_id)
     {

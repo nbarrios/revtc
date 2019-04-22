@@ -195,10 +195,19 @@ namespace Revtc {
 
 	struct BoonStack {
 		uint64_t start_time;
-		uint64_t end_time;
 		uint64_t duration;
+		bool is_offcycle;
 		uint32_t buff_instid;
 		bool is_clear;
+
+		BoonStack(uint64_t start_time, uint64_t duration, bool is_offcycle = false,
+			uint32_t buff_instid = 0, bool is_clear = false)
+			: start_time(start_time)
+			, duration(duration)
+			, is_offcycle(is_offcycle)
+			, buff_instid(buff_instid)
+			, is_clear(is_clear)
+		{}
 
 		friend inline bool operator<(const BoonStack& lhs, const BoonStack& rhs);
 	};
@@ -208,17 +217,9 @@ namespace Revtc {
 		std::string name;
 		bool intensity;
 		uint8_t max_stacks;
-		uint64_t last_seen;
 		std::vector<BoonStack> stacks;
-		std::map<uint64_t, uint16_t> events;
-	};
-
-	struct DurationStack {
-		std::vector<Boon> boon_queue;
-		std::vector<Boon> boon;
-		uint32_t boon_accum;
-		uint32_t boon_samples;
-		float boon_avg;
+		std::vector<BoonStack> replay;
+		float average;
 	};
 
 	struct Player {
@@ -297,8 +298,7 @@ namespace Revtc {
 		~Parser();
 
 		Log parse();
-		void apply_boonstack(Boon& boon, const CombatEvent& event, const Player& player);
-		void calcBoons(uint64_t log_start, uint64_t encounter_duration);
+		void replay_boons(uint64_t log_start, uint64_t encounter_duration);
 		std::string encounterName(BossID area_id);
 		std::pair<std::string, std::string> professionName(uint32_t prof);
 		std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
