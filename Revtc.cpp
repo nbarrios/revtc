@@ -526,11 +526,26 @@ namespace Revtc {
             case BossID::CONJURED_AMALGAMATE:
                 return "Conjured Amalgamate";
             case BossID::NIKARE:
-                return "Nikare";
+                return "Twin Largos";
             case BossID::KENUT:
-                return "Kenut";
+                return "Twin Largos";
             case BossID::QUADIM:
                 return "Qadim";
+			case BossID::BERG:
+			case BossID::ZANE:
+			case BossID::NURELLA:
+				return "Trio";
+			case BossID::MCLEOD:
+				return "Escort";
+			case BossID::RIVER:
+				return "River of Souls";
+			case BossID::BROKEN_KING:
+				return "Broken King";
+			case BossID::SOUL_EATER:
+				return "Soul Eater";
+			case BossID::EYE_OF_FATE:
+			case BossID::EYE_OF_JUDGEMENT:
+				return "Eyes";
             case BossID::MAMA:
                 return "M.A.M.A";
             case BossID::SIAX:
