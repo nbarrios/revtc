@@ -529,8 +529,14 @@ namespace Revtc {
                 return "Twin Largos";
             case BossID::KENUT:
                 return "Twin Largos";
-            case BossID::QUADIM:
+            case BossID::QADIM:
                 return "Qadim";
+			case BossID::ADINA:
+				return "Cardinal Adina";
+			case BossID::SABIR:
+				return "Cardinal Sabir";
+			case BossID::QADIM_THE_PEERLESS:
+				return "Qadim the Peerless";
 			case BossID::BERG:
 			case BossID::ZANE:
 			case BossID::NURELLA:
