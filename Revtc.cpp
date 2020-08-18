@@ -564,6 +564,20 @@ namespace Revtc {
                 return "Artsariiv";
             case BossID::ARKK:
                 return "Arkk";
+            case BossID::ICEBROOD:
+                return "Icebrood Construct";
+            case BossID::THE_VOICE:
+            case BossID::THE_CLAW:
+                return "The Voice and The Claw";
+            case BossID::FRAENIR:
+            case BossID::FRAENIR_CONSTRUCT:
+                return "Fraenir of Jormag";
+            case BossID::BONESKINNER:
+                return "Boneskinner";
+            case BossID::WHISPER_OF_JORMAG:
+                return "Whisper of Jormag";
+            case BossID::FREEZIE:
+                return "Freezie";
             case BossID::STANDARD_GOLEM:
                 return "Standard Kitty Golem";
             case BossID::MEDIUM_GOLEM:
