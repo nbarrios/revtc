@@ -325,7 +325,7 @@ namespace Revtc {
 
 		Log parse();
 		void replay_boons(uint64_t log_start, uint64_t encounter_duration);
-		std::string encounterName(BossID area_id);
+		static std::string encounterName(BossID area_id);
 		std::pair<std::string, std::string> professionName(uint32_t prof);
 		std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
 		BoonType skillidToBoonType(uint32_t id);
