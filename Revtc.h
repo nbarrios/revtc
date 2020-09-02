@@ -24,6 +24,16 @@ namespace Revtc {
 		FURY = 0x2D5,
 	};
 
+	enum class BossCategory : uint8_t
+	{
+		UNKNOWN = 0,
+		RAIDS,
+		FRACTALS,
+		STRIKES,
+		GOLEMS,
+		WVW
+	};
+
 	enum class BossID : uint16_t {
 		VALE_GUARDIAN = 15438,
 		GORSEVAL = 15429,
@@ -79,7 +89,9 @@ namespace Revtc {
 		LARGE_GOLEM = 19676,
 		MASSIVE_GOLEM = 16202,
 		AVERAGE_GOLEM = 16177,
-		VITAL_GOLEM = 16198
+		VITAL_GOLEM = 16198,
+		//WVW
+		WVW = 1,
 	};
 
 	//From deltaconnected's EVTC README.txt
@@ -326,6 +338,7 @@ namespace Revtc {
 		Log parse();
 		void replay_boons(uint64_t log_start, uint64_t encounter_duration);
 		static std::string encounterName(BossID area_id);
+		static BossCategory encounterCategory(BossID area_id);
 		std::pair<std::string, std::string> professionName(uint32_t prof);
 		std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
 		BoonType skillidToBoonType(uint32_t id);

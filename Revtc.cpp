@@ -590,8 +590,75 @@ namespace Revtc {
                 return "Average Kitty Golem";
             case BossID::VITAL_GOLEM:
                 return "Vital Kitty Golem";
+            case BossID::WVW:
+                return "WvW";
             default:
                 return "Unknown";
+                break;
+        }
+    }
+
+    BossCategory Parser::encounterCategory(BossID area_id)
+    {
+        switch (area_id)
+        {
+            case BossID::VALE_GUARDIAN:
+            case BossID::GORSEVAL:
+            case BossID::SABETHA:
+            case BossID::SLOTHASOR:
+            case BossID::MATTHIAS:
+            case BossID::KEEP_CONSTRUCT:
+            case BossID::XERA:
+            case BossID::CAIRN:
+            case BossID::MO:
+            case BossID::SAMAROG:
+            case BossID::DEIMOS:
+            case BossID::SOULLESS_HORROR:
+            case BossID::DHUUM:
+            case BossID::CONJURED_AMALGAMATE:
+            case BossID::NIKARE:
+            case BossID::KENUT:
+            case BossID::QADIM:
+			case BossID::ADINA:
+			case BossID::SABIR:
+			case BossID::QADIM_THE_PEERLESS:
+			case BossID::BERG:
+			case BossID::ZANE:
+			case BossID::NURELLA:
+			case BossID::MCLEOD:
+			case BossID::RIVER:
+			case BossID::BROKEN_KING:
+			case BossID::SOUL_EATER:
+			case BossID::EYE_OF_FATE:
+			case BossID::EYE_OF_JUDGEMENT:
+                return BossCategory::RAIDS;
+            case BossID::MAMA:
+            case BossID::SIAX:
+            case BossID::ENSOLYSS:
+            case BossID::SKORVALD:
+            case BossID::ARTSARIIV:
+            case BossID::ARKK:
+                return BossCategory::FRACTALS;
+            case BossID::ICEBROOD:
+            case BossID::THE_VOICE:
+            case BossID::THE_CLAW:
+            case BossID::FRAENIR:
+            case BossID::FRAENIR_CONSTRUCT:
+            case BossID::BONESKINNER:
+            case BossID::WHISPER_OF_JORMAG:
+            case BossID::FREEZIE:
+                return BossCategory::STRIKES;
+            case BossID::STANDARD_GOLEM:
+            case BossID::MEDIUM_GOLEM:
+            case BossID::LARGE_GOLEM:
+            case BossID::MASSIVE_GOLEM:
+            case BossID::AVERAGE_GOLEM:
+            case BossID::VITAL_GOLEM:
+                return BossCategory::GOLEMS;
+            case BossID::WVW:
+                return BossCategory::WVW;
+            default:
+                return BossCategory::UNKNOWN;
                 break;
         }
     }
