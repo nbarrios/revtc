@@ -564,6 +564,8 @@ namespace Revtc {
                 return "Artsariiv";
             case BossID::ARKK:
                 return "Arkk";
+            case BossID::SORROWFUL_SPELLCASTER:
+                return "Sorrowful Spellcaster";
             case BossID::ICEBROOD:
                 return "Icebrood Construct";
             case BossID::THE_VOICE:
@@ -638,6 +640,7 @@ namespace Revtc {
             case BossID::SKORVALD:
             case BossID::ARTSARIIV:
             case BossID::ARKK:
+            case BossID::SORROWFUL_SPELLCASTER:
                 return BossCategory::FRACTALS;
             case BossID::ICEBROOD:
             case BossID::THE_VOICE:

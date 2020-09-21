@@ -73,6 +73,7 @@ namespace Revtc {
 		SKORVALD = 17632,
 		ARTSARIIV = 17949,
 		ARKK = 17759,
+		SORROWFUL_SPELLCASTER = 23254,
 		//Strikes
 		ICEBROOD = 22154,
 		THE_VOICE = 22343,
@@ -339,8 +340,8 @@ namespace Revtc {
 		void replay_boons(uint64_t log_start, uint64_t encounter_duration);
 		static std::string encounterName(BossID area_id);
 		static BossCategory encounterCategory(BossID area_id);
-		std::pair<std::string, std::string> professionName(uint32_t prof);
-		std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
+		static std::pair<std::string, std::string> professionName(uint32_t prof);
+		static std::pair<std::string, std::string> eliteSpecName(uint32_t elite);
 		BoonType skillidToBoonType(uint32_t id);
 	};
 
