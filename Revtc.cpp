@@ -628,6 +628,7 @@ namespace Revtc {
 			case BossID::ZANE:
 			case BossID::NURELLA:
 			case BossID::MCLEOD:
+            case BossID::TWISTED_CASTLE:
 			case BossID::RIVER:
 			case BossID::BROKEN_KING:
 			case BossID::SOUL_EATER:
