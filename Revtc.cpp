@@ -578,6 +578,19 @@ namespace Revtc {
                 return "Boneskinner";
             case BossID::WHISPER_OF_JORMAG:
                 return "Whisper of Jormag";
+            //EOD Strikes
+            case BossID::CAPTAIN_MAI_TRIN:
+            case BossID::CAPTAIN_MAI_TRIN_2:
+                return "Captain Mai Trin";
+            case BossID::ANKKA:
+                return "Ankka";
+            case BossID::MINISTER_LI:
+            case BossID::MINISTER_LI_CM:
+                return "Minister Li";
+            case BossID::DRAGON_VOID_1:
+            case BossID::DRAGON_VOID_2:
+            case BossID::DRAGON_VOID_3:
+                return "Dragon Void";
             case BossID::FREEZIE:
                 return "Freezie";
             case BossID::STANDARD_GOLEM:
