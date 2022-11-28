@@ -92,6 +92,11 @@ namespace Revtc {
 		DRAGON_VOID_1 = 24375,
 		DRAGON_VOID_2 = 1378,
 		DRAGON_VOID_3 = 43488,
+		//Base Strikes
+		//Old Lion's Court
+		PROTOTYPE_VERMILION = 25413,
+		PROTOTYPE_INDIGO = 25419,
+		PROTOTYPE_ARSENITE = 25415,
 		//Holiday Missions
 		FREEZIE = 21333,
 		//Golems

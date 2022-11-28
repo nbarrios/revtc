@@ -566,6 +566,7 @@ namespace Revtc {
                 return "Arkk";
             case BossID::SORROWFUL_SPELLCASTER:
                 return "Sorrowful Spellcaster";
+            //IBS Strikes
             case BossID::ICEBROOD:
                 return "Icebrood Construct";
             case BossID::THE_VOICE:
@@ -578,6 +579,8 @@ namespace Revtc {
                 return "Boneskinner";
             case BossID::WHISPER_OF_JORMAG:
                 return "Whisper of Jormag";
+            case BossID::VARINIA_STORMSOUNDER:
+                return "Varinia Stormsounder";
             //EOD Strikes
             case BossID::CAPTAIN_MAI_TRIN:
             case BossID::CAPTAIN_MAI_TRIN_2:
@@ -591,6 +594,10 @@ namespace Revtc {
             case BossID::DRAGON_VOID_2:
             case BossID::DRAGON_VOID_3:
                 return "Dragon Void";
+            case BossID::PROTOTYPE_VERMILION:
+            case BossID::PROTOTYPE_INDIGO:
+            case BossID::PROTOTYPE_ARSENITE:
+                return "Old Lion's Court";
             case BossID::FREEZIE:
                 return "Freezie";
             case BossID::STANDARD_GOLEM:
@@ -656,6 +663,7 @@ namespace Revtc {
             case BossID::ARKK:
             case BossID::SORROWFUL_SPELLCASTER:
                 return BossCategory::FRACTALS;
+            //IBS Strikes
             case BossID::ICEBROOD:
             case BossID::THE_VOICE:
             case BossID::THE_CLAW:
@@ -663,6 +671,20 @@ namespace Revtc {
             case BossID::FRAENIR_CONSTRUCT:
             case BossID::BONESKINNER:
             case BossID::WHISPER_OF_JORMAG:
+            case BossID::VARINIA_STORMSOUNDER:
+            //EDO Strikes
+            case BossID::CAPTAIN_MAI_TRIN:
+            case BossID::CAPTAIN_MAI_TRIN_2:
+            case BossID::ANKKA:
+            case BossID::MINISTER_LI:
+            case BossID::MINISTER_LI_CM:
+            case BossID::DRAGON_VOID_1:
+            case BossID::DRAGON_VOID_2:
+            case BossID::DRAGON_VOID_3:
+            //Base Strikes
+            case BossID::PROTOTYPE_VERMILION:
+            case BossID::PROTOTYPE_INDIGO:
+            case BossID::PROTOTYPE_ARSENITE:
             case BossID::FREEZIE:
                 return BossCategory::STRIKES;
             case BossID::STANDARD_GOLEM:
