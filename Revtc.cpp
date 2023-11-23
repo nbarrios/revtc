@@ -597,9 +597,16 @@ namespace Revtc {
             case BossID::PROTOTYPE_VERMILION:
             case BossID::PROTOTYPE_INDIGO:
             case BossID::PROTOTYPE_ARSENITE:
+            case BossID::PROTOTYPE_VERMILION_CM:
+            case BossID::PROTOTYPE_INDIGO_CM:
+            case BossID::PROTOTYPE_ARSENITE_CM:
                 return "Old Lion's Court";
             case BossID::FREEZIE:
                 return "Freezie";
+            case BossID::DAGDA:
+                return "Dagda";
+            case BossID::CERUS:
+                return "Cerus";
             case BossID::STANDARD_GOLEM:
                 return "Standard Kitty Golem";
             case BossID::MEDIUM_GOLEM:
@@ -641,19 +648,19 @@ namespace Revtc {
             case BossID::NIKARE:
             case BossID::KENUT:
             case BossID::QADIM:
-			case BossID::ADINA:
-			case BossID::SABIR:
-			case BossID::QADIM_THE_PEERLESS:
-			case BossID::BERG:
-			case BossID::ZANE:
-			case BossID::NURELLA:
-			case BossID::MCLEOD:
+            case BossID::ADINA:
+            case BossID::SABIR:
+            case BossID::QADIM_THE_PEERLESS:
+            case BossID::BERG:
+            case BossID::ZANE:
+            case BossID::NURELLA:
+            case BossID::MCLEOD:
             case BossID::TWISTED_CASTLE:
-			case BossID::RIVER:
-			case BossID::BROKEN_KING:
-			case BossID::SOUL_EATER:
-			case BossID::EYE_OF_FATE:
-			case BossID::EYE_OF_JUDGEMENT:
+            case BossID::RIVER:
+            case BossID::BROKEN_KING:
+            case BossID::SOUL_EATER:
+            case BossID::EYE_OF_FATE:
+            case BossID::EYE_OF_JUDGEMENT:
                 return BossCategory::RAIDS;
             case BossID::MAMA:
             case BossID::SIAX:
@@ -672,7 +679,7 @@ namespace Revtc {
             case BossID::BONESKINNER:
             case BossID::WHISPER_OF_JORMAG:
             case BossID::VARINIA_STORMSOUNDER:
-            //EDO Strikes
+            //EoD Strikes
             case BossID::CAPTAIN_MAI_TRIN:
             case BossID::CAPTAIN_MAI_TRIN_2:
             case BossID::ANKKA:
@@ -685,6 +692,12 @@ namespace Revtc {
             case BossID::PROTOTYPE_VERMILION:
             case BossID::PROTOTYPE_INDIGO:
             case BossID::PROTOTYPE_ARSENITE:
+            case BossID::PROTOTYPE_VERMILION_CM:
+            case BossID::PROTOTYPE_INDIGO_CM:
+            case BossID::PROTOTYPE_ARSENITE_CM:
+            //SotO Strikes
+            case BossID::DAGDA:
+            case BossID::CERUS:
             case BossID::FREEZIE:
                 return BossCategory::STRIKES;
             case BossID::STANDARD_GOLEM:
